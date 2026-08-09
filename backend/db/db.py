@@ -32,9 +32,11 @@ async def init_db(db_path: str | None = None) -> None:
     resolved_path = _default_db_path(db_path)
     schema_sql = _SCHEMA_PATH.read_text(encoding="utf-8")
     async with aiosqlite.connect(resolved_path) as db:
-        # executescript doesn't play well with parameterised queries but is
-        # fine for DDL-only files.
         await db.executescript(schema_sql)
+        try:
+            await db.execute("ALTER TABLE cases ADD COLUMN tier TEXT DEFAULT 'low'")
+        except Exception:
+            pass
         await db.commit()
     logger.info("VIGIL: database schema initialised at %s", resolved_path)
 
@@ -48,26 +50,26 @@ async def seed_demo_cases(db_path: str | None = None) -> None:
         now = "2026-08-09T06:00:00Z"
         await db.execute(
             """
-            INSERT OR IGNORE INTO cases (case_id, zone_id, state, risk_tier, compound_score, authorized, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO cases (case_id, zone_id, state, risk_tier, tier, compound_score, authorized, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("case-zone-a-001", "zone-a", "INVESTIGATING", "high", 0.72, 0, now, "2026-08-09T06:15:00Z"),
+            ("case-zone-a-001", "zone-a", "INVESTIGATING", "high", "high", 0.72, 0, now, "2026-08-09T06:15:00Z"),
         )
         
         await db.execute(
             """
-            INSERT OR IGNORE INTO cases (case_id, zone_id, state, risk_tier, compound_score, authorized, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO cases (case_id, zone_id, state, risk_tier, tier, compound_score, authorized, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("case-zone-b-002", "zone-b", "DETECTED", "medium", 0.45, 0, "2026-08-09T06:30:00Z", "2026-08-09T06:30:00Z"),
+            ("case-zone-b-002", "zone-b", "DETECTED", "medium", "medium", 0.45, 0, "2026-08-09T06:30:00Z", "2026-08-09T06:30:00Z"),
         )
         
         await db.execute(
             """
-            INSERT OR IGNORE INTO cases (case_id, zone_id, state, risk_tier, compound_score, authorized, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO cases (case_id, zone_id, state, risk_tier, tier, compound_score, authorized, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("c_8f21", "Bay3", "DETECTED", "high", 0.78, 0, now, now),
+            ("c_8f21", "Bay3", "DETECTED", "high", "high", 0.78, 0, now, now),
         )
         
         logger.info("VIGIL: seeded demo cases into %s", resolved_path)
@@ -84,7 +86,7 @@ async def get_db(db_path: str | None = None) -> AsyncGenerator[aiosqlite.Connect
             cursor = await db.execute("SELECT * FROM cases")
     """
     resolved_path = _default_db_path(db_path)
-    async with aiosqlite.connect(resolved_path) as db:
+    async with aiosqlite.connect(resolved_path, isolation_level=None) as db:
         db.row_factory = aiosqlite.Row   # dict-like row access
         try:
             yield db
@@ -93,3 +95,9 @@ async def get_db(db_path: str | None = None) -> AsyncGenerator[aiosqlite.Connect
             raise
         else:
             await db.commit()
+
+
+async def execute_write(sql: str, params: tuple = ()) -> None:
+    async with get_db() as db:
+        await db.execute(sql, params)
+        await db.commit()

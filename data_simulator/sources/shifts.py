@@ -33,7 +33,7 @@ class ShiftSimulator:
 
     # ── Emission ──────────────────────────────────────────────────────────── #
 
-    def emit(
+    async def emit(
         self,
         event: str,
         supervisor: str,
@@ -56,11 +56,13 @@ class ShiftSimulator:
             changeover_in_minutes: minutes until next changeover (for warnings)
             shift_id  : if None, a UUID is generated
         """
+        from backend.db.db import execute_write
+
         # Shift changeover is an elevated signal (distracting + increases error rate)
         if event == "changeover_warning" and severity_hint == "normal":
             severity_hint = "elevated"
 
-        return {
+        built_event = {
             "event_id": str(uuid.uuid4()),
             "source": "shift",
             "zone_id": self.zone_id,
@@ -78,6 +80,14 @@ class ShiftSimulator:
             },
             "severity_hint": severity_hint,
         }
+
+        await execute_write(
+            "INSERT OR REPLACE INTO shifts VALUES (?,?,?,?)",
+            (built_event["metadata"]["shift_id"], built_event["zone_id"],
+             built_event["ts"], None)
+        )
+
+        return built_event
 
     async def emit_and_persist(
         self,

@@ -25,7 +25,7 @@ load_dotenv()  # noqa: E402 — must run before any os.environ reads
 from backend.api import routes_cases, routes_demo, routes_memory, routes_retrieval, routes_risk, routes_voice
 from backend.api.ws_session import router as ws_router, start_ws_bridge
 from backend.bus.event_bus import bus
-from backend.db.db import init_db, seed_demo_cases
+from backend.db.db import init_db, seed_demo_cases, execute_write
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +46,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await seed_demo_cases(db_path)
 
     await bus.start()
+
+    async def on_risk_assessed(event: dict) -> None:
+        await execute_write(
+            "UPDATE cases SET compound_score=?, tier=?, state=? WHERE case_id=?",
+            (event["compound_score"], event["tier"], "INVESTIGATING", event["case_id"])
+        )
+    await bus.subscribe("risk.assessed", on_risk_assessed)
+
     await start_ws_bridge(bus)
     logger.info("Event bus started, WS bridge active")
 

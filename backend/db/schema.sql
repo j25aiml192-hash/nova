@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS cases (
     zone_id       TEXT NOT NULL,
     state         TEXT NOT NULL DEFAULT 'DETECTED',
     risk_tier     TEXT NOT NULL DEFAULT 'low',
+    tier          TEXT NOT NULL DEFAULT 'low',
     compound_score REAL NOT NULL DEFAULT 0.0,
     authorized    INTEGER NOT NULL DEFAULT 0,   -- SQLite boolean (0/1)
     authorized_by TEXT,
@@ -50,11 +51,8 @@ CREATE TABLE IF NOT EXISTS maintenance_records (
 CREATE TABLE IF NOT EXISTS shifts (
     shift_id      TEXT PRIMARY KEY,
     zone_id       TEXT NOT NULL,
-    supervisor    TEXT NOT NULL,
-    headcount     INTEGER NOT NULL DEFAULT 0,
-    started_at    TEXT NOT NULL,
-    ends_at       TEXT NOT NULL,
-    is_changeover INTEGER NOT NULL DEFAULT 0
+    ts            TEXT,
+    metadata      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS equipment (
